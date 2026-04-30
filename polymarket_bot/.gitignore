@@ -1,0 +1,11 @@
+.env
+.env.local
+*.log
+bot_state.json
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
