@@ -2,3 +2,11 @@ _site/
 .sass-cache/
 .jekyll-metadata
 .bundle
+
+# Python (ftmo_oanda)
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.env
+.pytest_cache/
