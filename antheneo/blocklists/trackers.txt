@@ -1,0 +1,170 @@
+# Antheneo Tracker & Ad Blocklist
+# Format: one domain per line, # for comments
+# Sources: EasyList, EasyPrivacy, uBlock Origin (subset)
+
+# ── Google Ads & Tracking ────────────────────────────────────
+doubleclick.net
+googleadservices.com
+googlesyndication.com
+google-analytics.com
+googletagmanager.com
+googletagservices.com
+stats.g.doubleclick.net
+pagead2.googlesyndication.com
+adservice.google.com
+adservice.google.co.uk
+adservice.google.de
+ade.googlesyndication.com
+cm.g.doubleclick.net
+
+# ── Facebook / Meta Tracking ────────────────────────────────
+connect.facebook.net
+facebook.com/tr
+pixel.facebook.com
+an.facebook.com
+graph.facebook.com/impression
+staticxx.facebook.com
+www.facebook.com/plugins/like.php
+
+# ── Twitter / X Ads ─────────────────────────────────────────
+ads-twitter.com
+ads.twitter.com
+t.co
+analytics.twitter.com
+p.twitter.com
+
+# ── Amazon Ads ───────────────────────────────────────────────
+fls-na.amazon.com
+ir-na.amazon-adsystem.com
+amazon-adsystem.com
+dtb.amazon.com
+aax.amazon.com
+
+# ── Microsoft Advertising ────────────────────────────────────
+bat.bing.com
+bing.com/fd
+clarity.ms
+c.clarity.ms
+ads.microsoft.com
+
+# ── Yahoo / Verizon ──────────────────────────────────────────
+ads.yahoo.com
+adtech.de
+advertising.com
+brightroll.com
+nexage.com
+mads.amazon.com
+
+# ── Major Tracking Networks ──────────────────────────────────
+scorecardresearch.com
+quantserve.com
+addthis.com
+sharethis.com
+chartbeat.com
+parsely.com
+newrelic.com
+nr-data.net
+optimizely.com
+segment.com
+segment.io
+amplitude.com
+mixpanel.com
+kissmetrics.com
+hotjar.com
+fullstory.com
+logrocket.com
+mouseflow.com
+crazyegg.com
+
+# ── Ad Networks ──────────────────────────────────────────────
+outbrain.com
+taboola.com
+revcontent.com
+media.net
+mathtag.com
+rubiconproject.com
+appnexus.com
+openx.net
+openx.com
+pubmatic.com
+criteo.com
+criteo.net
+criteo.fr
+adroll.com
+adblade.com
+aolcloud.net
+adnxs.com
+atwola.com
+turn.com
+spotxchange.com
+springserve.com
+sizmek.com
+liveramp.com
+liveramp.net
+adsymptotic.com
+sovrn.com
+lijit.com
+casalemedia.com
+indexww.com
+contextweb.com
+districtm.io
+tremorhub.com
+undertone.com
+
+# ── Data Brokers / Identity Resolution ──────────────────────
+acxiom.com
+bluekai.com
+oracle.com/cx/advertising
+datalogix.com
+truoptik.com
+experian.com/marketing-services
+lotame.com
+krux.com
+neustar.biz
+nielsen.com/audiences
+id5.io
+zeotap.com
+syncids.com
+
+# ── Cross-site Trackers ──────────────────────────────────────
+cdn.mxpnl.com
+api.mixpanel.com
+track.hubspot.com
+js.hs-scripts.com
+hs-analytics.net
+hsadspixel.net
+hscollectedforms.net
+ct.pinterest.com
+log.pinterest.com
+analytics.pinterest.com
+trk.pinterest.com
+snap.licdn.com
+px.ads.linkedin.com
+analytics.linkedin.com
+
+# ── Social Widgets (privacy leak) ────────────────────────────
+platform.twitter.com
+staticxx.facebook.com
+graph.facebook.com/plugins
+api.instagram.com
+platform.linkedin.com
+
+# ── Telemetry ────────────────────────────────────────────────
+telemetry.mozilla.org
+incoming.telemetry.mozilla.org
+telemetry.microsoft.com
+vortex.data.microsoft.com
+watson.microsoft.com
+browser.pipe.aria.microsoft.com
+dc.services.visualstudio.com
+browser.events.data.microsoft.com
+
+# ── Malware / Phishing Indicators ────────────────────────────
+malware-domains.com
+fraudscore.io
+fraudlogix.com
+
+# ── Fingerprinting Scripts ───────────────────────────────────
+cdn.jsdelivr.net/fingerprintjs
+fpnpmcdn.net
+fingerprintjs.com
