@@ -34,6 +34,7 @@ from PyQt6.QtGui import (
 
 from ui.themes import DARK_STYLESHEET, HACKER_MODE_ACCENT, ACCENT, ACCENT_HACK, SUCCESS, DANGER
 from core.privacy import AnthenePrivacyInterceptor, PrivacyStats, FINGERPRINT_PROTECTION_JS
+from version import APP_NAME, VERSION, COPYRIGHT
 
 try:
     from ui.hacker_panel import HackerToolsPanel
@@ -41,9 +42,18 @@ try:
 except ImportError:
     HACKER_PANEL_AVAILABLE = False
 
-APP_DIR = Path(__file__).parent
-SETTINGS_FILE = APP_DIR / "settings.json"
-HOME_URL = "https://search.brave.com"          # Default home — user can change
+# When running as a PyInstaller bundle, __file__ lives inside the temp
+# extraction dir (_MEIPASS). User data must go to a real persistent location.
+if getattr(sys, "frozen", False):
+    APP_DIR  = Path(sys._MEIPASS)          # read-only bundle resources
+    APP_DATA = Path.home() / ".antheneo"   # writable user data
+else:
+    APP_DIR  = Path(__file__).parent
+    APP_DATA = APP_DIR
+
+APP_DATA.mkdir(parents=True, exist_ok=True)
+SETTINGS_FILE = APP_DATA / "settings.json"
+HOME_URL    = "https://search.brave.com"
 NEW_TAB_URL = "about:blank"
 
 
@@ -212,7 +222,7 @@ class AntheoBrowser(QMainWindow):
 
         # Open initial tab
         self.new_tab(self.settings.get("home_url", HOME_URL))
-        self.setWindowTitle("Antheneo Browser")
+        self.setWindowTitle(f"{APP_NAME} Browser")
         self.resize(1280, 800)
 
     # ── Profile Setup ──────────────────────────────────────────────────────
@@ -782,8 +792,8 @@ class AntheoBrowser(QMainWindow):
     # ── About Dialog ───────────────────────────────────────────────────────
 
     def _show_about(self):
-        QMessageBox.about(self, "About Antheneo",
-            "<h2 style='color:#00d4d4'>Antheneo Browser v1.0</h2>"
+        QMessageBox.about(self, f"About {APP_NAME}",
+            f"<h2 style='color:#00d4d4'>{APP_NAME} Browser v{VERSION}</h2>"
             "<p>A privacy-first, resource-light browser with integrated ethical hacking tools.</p>"
             "<p><b>Privacy features:</b></p>"
             "<ul>"
@@ -803,9 +813,10 @@ class AntheoBrowser(QMainWindow):
             "<li>JavaScript console with history</li>"
             "<li>WHOIS, robots.txt, security header audit</li>"
             "</ul>"
-            "<p style='color:#8b949e; font-size:11px;'>"
-            "Hacker Mode tools are for authorized testing only.<br>"
-            "Built with PyQt6 + QtWebEngine.</p>"
+            f"<p style='color:#8b949e; font-size:11px;'>"
+            f"{COPYRIGHT}<br>"
+            f"Hacker Mode tools are for authorized testing only.<br>"
+            f"Built with PyQt6 + QtWebEngine.</p>"
         )
 
     # ── Theme ──────────────────────────────────────────────────────────────

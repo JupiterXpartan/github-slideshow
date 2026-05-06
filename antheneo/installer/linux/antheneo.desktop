@@ -1,0 +1,13 @@
+[Desktop Entry]
+Name=Antheneo Browser
+GenericName=Web Browser
+Comment=Privacy-first browser with ethical hacking tools
+Exec=/opt/antheneo/antheneo %U
+Icon=/opt/antheneo/assets/icon.png
+Terminal=false
+Type=Application
+Categories=Network;WebBrowser;Security;
+MimeType=text/html;text/xml;application/xhtml+xml;x-scheme-handler/http;x-scheme-handler/https;
+StartupNotify=true
+StartupWMClass=Antheneo
+Keywords=browser;privacy;security;hacker;web;

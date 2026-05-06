@@ -1,0 +1,10 @@
+VERSION       = "1.0.0"
+VERSION_TUPLE = (1, 0, 0)
+APP_NAME      = "Antheneo"
+APP_ID        = "com.antheneo.browser"
+DESCRIPTION   = "Privacy-first browser with ethical hacking tools"
+AUTHOR        = "Antheneo Team"
+AUTHOR_EMAIL  = "hello@antheneo.io"
+COPYRIGHT     = "© 2025 Antheneo"
+URL           = "https://antheneo.io"
+LICENSE       = "Proprietary"

@@ -74,7 +74,13 @@ class AnthenePrivacyInterceptor(QWebEngineUrlRequestInterceptor):
     # ── Blocklist Loading ──────────────────────────────────────────────────
 
     def _load_blocklist(self):
-        blocklist_path = Path(__file__).parent.parent / "blocklists" / "trackers.txt"
+        # Support both normal and PyInstaller frozen layouts
+        if getattr(__import__("sys"), "frozen", False):
+            import sys as _sys
+            base = Path(_sys._MEIPASS)
+        else:
+            base = Path(__file__).parent.parent
+        blocklist_path = base / "blocklists" / "trackers.txt"
         if not blocklist_path.exists():
             return
         with blocklist_path.open() as f:
