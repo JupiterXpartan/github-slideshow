@@ -1,280 +1,294 @@
 #!/usr/bin/env python3
 """
 Antheneo Browser — Master Build Script
-Compiles the browser with PyInstaller and creates a platform installer.
+
+Two-stage build:
+  Stage 1 → Compile the browser        (PyInstaller → dist/antheneo/)
+  Stage 2 → Zip the browser bundle     (dist/browser_bundle.zip)
+  Stage 3 → Compile the wizard         (PyInstaller onefile → dist/Antheneo-Setup-<ver>)
+
+The final deliverable is a single installer executable that end-users
+double-click to launch the GUI installation wizard.
 
 Usage:
-    python build.py              # full build for current platform
-    python build.py --clean      # remove dist/ and build/ first
-    python build.py --icon-only  # regenerate icons only
-    python build.py --no-installer  # skip installer creation
+    python build.py                   # full build
+    python build.py --clean           # remove dist/ and build/ first
+    python build.py --icon-only       # regenerate icons only, then exit
+    python build.py --browser-only    # stages 1–2, skip wizard
+    python build.py --wizard-only     # stage 3 only (browser must be pre-built)
+    python build.py --version 1.2.0   # override version string
 """
 
 import sys
 import os
 import shutil
 import subprocess
+import zipfile
 import argparse
 import platform
 from pathlib import Path
 
-ROOT = Path(__file__).parent
-DIST = ROOT / "dist"
-BUILD = ROOT / "build"
+ROOT    = Path(__file__).parent
+DIST    = ROOT / "dist"
+BUILD   = ROOT / "build"
+ASSETS  = ROOT / "assets"
+WIZARD  = ROOT / "installer" / "wizard"
 
 # ── ANSI colours ──────────────────────────────────────────────────────────
-C = "\033[0;36m"; G = "\033[0;32m"; R = "\033[0;31m"; W = "\033[0;33m"; N = "\033[0m"
+C = "\033[0;36m"; G = "\033[0;32m"; R = "\033[0;31m"
+W = "\033[0;33m"; B = "\033[1m";    N = "\033[0m"
 
-def info(msg):  print(f"{C}[build]{N} {msg}")
-def ok(msg):    print(f"{G}  ✔{N}  {msg}")
-def warn(msg):  print(f"{W}  ⚠{N}  {msg}")
-def err(msg):   print(f"{R}  ✘{N}  {msg}"); sys.exit(1)
+def info(m):  print(f"\n{C}{B}[build]{N} {m}")
+def ok(m):    print(f"  {G}✔{N}  {m}")
+def warn(m):  print(f"  {W}⚠{N}  {m}")
+def step(m):  print(f"  {C}→{N}  {m}")
+def err(m):   print(f"  {R}✘{N}  {m}"); sys.exit(1)
 
-def run(*cmd, **kwargs):
-    """Run a command, streaming output, and raise on failure."""
-    info(f"Running: {' '.join(str(c) for c in cmd)}")
-    result = subprocess.run(cmd, **kwargs)
-    if result.returncode != 0:
-        err(f"Command failed with exit code {result.returncode}")
-    return result
+def run(*cmd, cwd=None):
+    step(" ".join(str(c) for c in cmd))
+    r = subprocess.run(cmd, cwd=cwd or ROOT)
+    if r.returncode != 0:
+        err(f"Command exited with code {r.returncode}")
 
 
-# ── Step 1: Dependency check ──────────────────────────────────────────────
+# ── Step helpers ──────────────────────────────────────────────────────────
+
+def clean():
+    info("Cleaning previous build artifacts")
+    for d in [DIST, BUILD]:
+        if d.exists():
+            shutil.rmtree(d)
+            ok(f"Removed {d.relative_to(ROOT)}")
+
 
 def check_deps():
-    info("Checking dependencies…")
+    info("Checking Python dependencies")
+    pkgs = [
+        ("PyInstaller",                 "pyinstaller"),
+        ("pyinstaller_hooks_contrib",   "pyinstaller-hooks-contrib"),
+        ("PIL",                         "Pillow"),
+        ("PyQt6",                       "PyQt6"),
+    ]
     missing = []
-    for pkg in ["PyInstaller", "PyQt6", "PyQt6-WebEngine"]:
+    for module, pkg in pkgs:
         try:
-            __import__(pkg.replace("-", "_").lower().split(".")[0])
+            __import__(module)
         except ImportError:
             missing.append(pkg)
 
     if missing:
-        warn(f"Missing packages: {', '.join(missing)}")
-        info("Installing…")
-        run(sys.executable, "-m", "pip", "install", *missing)
-    ok("All dependencies present")
+        warn(f"Missing: {', '.join(missing)} — installing…")
+        run(sys.executable, "-m", "pip", "install", *missing, "-q")
+    ok("All dependencies satisfied")
 
-    # pyinstaller-hooks-contrib improves Qt WebEngine support
-    try:
-        import _pyinstaller_hooks_contrib  # noqa: F401
-    except ImportError:
-        info("Installing pyinstaller-hooks-contrib for better Qt support…")
-        run(sys.executable, "-m", "pip", "install", "pyinstaller-hooks-contrib")
-
-    # UPX (optional — compresses the binary)
     if shutil.which("upx"):
-        ok("UPX found — binary compression enabled")
+        ok("UPX found — binary compression will be applied")
     else:
-        warn("UPX not found — binaries will not be compressed (optional)")
-        warn("  Linux: sudo apt install upx | Windows: https://upx.github.io")
+        warn("UPX not found (optional). sudo apt install upx  or  https://upx.github.io")
 
 
-# ── Step 2: Icon generation ───────────────────────────────────────────────
+def generate_icons(force: bool = False):
+    info("Generating application icons")
+    icon_png = ASSETS / "icon.png"
+    icon_ico = ASSETS / "icon.ico"
+    icon_svg = ASSETS / "icon.svg"
 
-def generate_icons():
-    info("Generating application icons…")
-    icon_script = ROOT / "assets" / "generate_icon.py"
-    icon_png = ROOT / "assets" / "icon.png"
+    if not force and icon_png.exists() and icon_ico.exists():
+        ok("Icons already present (pass --clean to regenerate)")
+        return
+
+    gen_script = ASSETS / "generate_icon.py"
+    try:
+        import PIL  # noqa: F401
+        run(sys.executable, str(gen_script))
+        ok("Raster + SVG icons generated")
+    except ImportError:
+        warn("Pillow not installed — generating SVG icon only")
+        run(sys.executable, str(gen_script))
 
     if not icon_png.exists():
-        try:
-            import PIL  # noqa: F401
-            run(sys.executable, str(icon_script))
-        except ImportError:
-            warn("Pillow not installed — skipping raster icons.")
-            warn("  Install with: pip install Pillow")
-            info("Generating SVG icon only…")
-            run(sys.executable, str(icon_script))
-    else:
-        ok("Icons already generated (use --clean to regenerate)")
+        # Create a minimal placeholder so PyInstaller doesn't fail
+        icon_png.write_bytes(b"")
+        warn("icon.png placeholder created (install Pillow for a real icon)")
 
 
-# ── Step 3: Clean ─────────────────────────────────────────────────────────
+# ── Stage 1: Compile browser ──────────────────────────────────────────────
 
-def clean():
-    info("Cleaning previous build artifacts…")
-    for d in [DIST, BUILD]:
-        if d.exists():
-            shutil.rmtree(d)
-            ok(f"Removed {d}")
-
-
-# ── Step 4: PyInstaller ───────────────────────────────────────────────────
-
-def run_pyinstaller():
-    info("Running PyInstaller…")
+def build_browser():
+    info("Stage 1 — Compiling browser (PyInstaller)")
     spec = ROOT / "antheneo.spec"
     run(
         sys.executable, "-m", "PyInstaller",
         str(spec),
         "--distpath", str(DIST),
-        "--workpath", str(BUILD),
+        "--workpath", str(BUILD / "browser"),
         "--noconfirm",
-        cwd=str(ROOT),
+        cwd=ROOT,
     )
-
     bundle = DIST / "antheneo"
     if not bundle.exists():
-        err(f"Expected bundle not found at {bundle}")
-    ok(f"Bundle created: {bundle}")
+        err(f"Expected browser bundle at {bundle} — PyInstaller failed")
+    ok(f"Browser bundle → {bundle.relative_to(ROOT)}")
     return bundle
 
 
-# ── Step 5: Platform installer ────────────────────────────────────────────
+# ── Stage 2: Zip the browser bundle ──────────────────────────────────────
 
-def build_linux_deb(version: str):
-    info("Building Linux .deb package…")
-    deb_script = ROOT / "installer" / "linux" / "build_deb.sh"
-    if not deb_script.exists():
-        warn("build_deb.sh not found — skipping .deb build")
-        return
-    if not shutil.which("dpkg-deb"):
-        warn("dpkg-deb not found — skipping .deb (install dpkg-dev)")
-        _build_tarball(version)
-        return
-    run("bash", str(deb_script), version, cwd=str(ROOT))
-    ok("Debian package built")
+def zip_browser(bundle: Path, version: str) -> Path:
+    info("Stage 2 — Zipping browser bundle")
+    zip_path = DIST / "browser_bundle.zip"
+    files = [f for f in bundle.rglob("*") if f.is_file()]
+    total = len(files)
 
-
-def _build_tarball(version: str):
-    info("Falling back to tarball distribution…")
-    tar_name = f"antheneo-{version}-linux-x86_64.tar.gz"
-    tar_path = DIST / tar_name
-    import tarfile
-    with tarfile.open(tar_path, "w:gz") as tar:
-        tar.add(DIST / "antheneo", arcname="antheneo")
-        # Include install script
-        install_sh = ROOT / "installer" / "linux" / "install.sh"
-        if install_sh.exists():
-            tar.add(install_sh, arcname="install.sh")
-        desktop = ROOT / "installer" / "linux" / "antheneo.desktop"
-        if desktop.exists():
-            tar.add(desktop, arcname="antheneo.desktop")
-    ok(f"Tarball: {tar_path}")
-    _print_linux_instructions(tar_name, version)
-
-
-def _print_linux_instructions(archive: str, version: str):
-    print(f"""
-{G}Linux distribution:{N}
-  Archive:  dist/{archive}
-  Install:  tar xf {archive} && sudo bash install.sh
-""")
-
-
-def build_windows_installer(version: str):
-    info("Preparing Windows installer…")
-    nsis = shutil.which("makensis") or shutil.which("makensis.exe")
-    if not nsis:
-        warn("makensis not found — NSIS installer script is ready at:")
-        warn("  installer/windows/installer.nsi")
-        warn("  Install NSIS on Windows and run: makensis installer.nsi")
-        _build_windows_zip(version)
-        return
-    nsi = ROOT / "installer" / "windows" / "installer.nsi"
-    run(nsis, str(nsi), cwd=str(ROOT))
-    ok("Windows installer built")
-
-
-def _build_windows_zip(version: str):
-    import zipfile
-    zip_name = f"Antheneo-{version}-Windows.zip"
-    zip_path = DIST / zip_name
-    bundle = DIST / "antheneo"
-    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
-        for file in bundle.rglob("*"):
-            zf.write(file, file.relative_to(DIST))
-    ok(f"Windows zip: {zip_path}")
-
-
-def build_macos_dmg(version: str):
-    info("Building macOS DMG…")
-    script = ROOT / "installer" / "macos" / "build_dmg.sh"
-    run("bash", str(script), version, cwd=str(ROOT))
-    ok("macOS DMG built")
-
-
-# ── Step 6: Summary ───────────────────────────────────────────────────────
-
-def print_summary(plat: str, version: str):
-    print(f"""
-{C}╔═══════════════════════════════════════════════════╗
-║  Antheneo Browser v{version} — Build Complete       ║
-╚═══════════════════════════════════════════════════╝{N}
-
-  Platform:   {plat}
-  Output dir: dist/
-
-""")
-    if plat == "linux":
-        deb = next(DIST.glob("*.deb"), None)
-        tar = next(DIST.glob("*.tar.gz"), None)
-        if deb:
-            print(f"  {G}Debian package:{N}  {deb.name}")
-            print(f"  Install:   sudo dpkg -i dist/{deb.name}")
-        if tar:
-            print(f"  {G}Tarball:{N}          {tar.name}")
-            print(f"  Install:   tar xf dist/{tar.name} && sudo bash install.sh")
-    elif plat == "windows":
-        exe = next(DIST.glob("*.exe"), None)
-        _zip = next(DIST.glob("*.zip"), None)
-        if exe:
-            print(f"  {G}Installer:{N}  {exe.name}  (run as administrator)")
-        if _zip:
-            print(f"  {G}Portable:{N}   {_zip.name}  (extract and run antheneo.exe)")
-    elif plat == "darwin":
-        dmg = next(DIST.glob("*.dmg"), None)
-        if dmg:
-            print(f"  {G}Disk image:{N}  {dmg.name}")
-            print("  Install:   Open DMG → drag to Applications")
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as zf:
+        for i, f in enumerate(files, 1):
+            arcname = f.relative_to(bundle)
+            zf.write(f, arcname)
+            if i % 50 == 0 or i == total:
+                pct = int(i / total * 100)
+                print(f"\r    Zipping… {pct}% ({i}/{total})", end="", flush=True)
     print()
+
+    size_mb = zip_path.stat().st_size / 1024**2
+    ok(f"Bundle zip → {zip_path.relative_to(ROOT)}  ({size_mb:.1f} MB)")
+    return zip_path
+
+
+# ── Stage 3: Compile wizard ───────────────────────────────────────────────
+
+def build_wizard(version: str) -> Path:
+    info("Stage 3 — Compiling installation wizard (PyInstaller onefile)")
+
+    # Patch version in wizard spec's output name dynamically via env
+    env = os.environ.copy()
+    env["ANTHENEO_VERSION"] = version
+
+    spec = WIZARD / "wizard.spec"
+    run(
+        sys.executable, "-m", "PyInstaller",
+        str(spec),
+        "--distpath", str(DIST),
+        "--workpath", str(BUILD / "wizard"),
+        "--noconfirm",
+        cwd=ROOT,
+    )
+
+    plat    = platform.system().lower()
+    suffix  = ".exe" if plat == "windows" else ""
+    out_exe = DIST / f"Antheneo-Setup-{version}{suffix}"
+
+    # PyInstaller names it per the spec — find and rename if needed
+    candidates = [
+        DIST / f"Antheneo-Setup-1.0.0{suffix}",
+        DIST / f"Antheneo-Setup-{version}{suffix}",
+        DIST / f"antheneo-setup{suffix}",
+    ]
+    found = next((p for p in candidates if p.exists()), None)
+    if found and found != out_exe:
+        found.rename(out_exe)
+    elif not out_exe.exists():
+        matches = list(DIST.glob(f"*Setup*{suffix}")) + list(DIST.glob(f"*setup*{suffix}"))
+        if matches:
+            matches[0].rename(out_exe)
+        else:
+            err("Wizard executable not found after PyInstaller run")
+
+    size_mb = out_exe.stat().st_size / 1024**2
+    ok(f"Installer wizard → {out_exe.relative_to(ROOT)}  ({size_mb:.1f} MB)")
+    return out_exe
+
+
+# ── Summary ────────────────────────────────────────────────────────────────
+
+def print_summary(exe: Path, version: str):
+    plat = platform.system().lower()
+    print(f"""
+{C}{B}╔══════════════════════════════════════════════════════════════╗
+║   Antheneo Browser v{version} — Build Complete                ║
+╚══════════════════════════════════════════════════════════════╝{N}
+
+  {G}Installer:{N}  {exe}
+
+  {B}How to distribute:{N}
+    Ship only this single file to end-users.
+    They double-click it → the GUI wizard guides them through setup.
+
+  {B}How to install:{N}""")
+
+    if plat == "linux":
+        print(f"    chmod +x {exe.name} && ./{exe.name}")
+    elif plat == "windows":
+        print(f"    Double-click  {exe.name}  (Run as Administrator)")
+    elif plat == "darwin":
+        print(f"    Double-click  {exe.name}")
+
+    print(f"""
+  {B}Wizard steps:{N}
+    Welcome → License Agreement → Install Path → Options → Installing → Finish
+
+  {B}What the wizard does:{N}
+    • Extracts the bundled browser to the chosen directory
+    • Creates desktop shortcut and application menu entry
+    • Adds  antheneo  to PATH (Linux/macOS)
+    • Registers in Add/Remove Programs (Windows)
+    • Optionally launches the browser on completion
+""")
 
 
 # ── Main ──────────────────────────────────────────────────────────────────
 
 def main():
-    parser = argparse.ArgumentParser(description="Build Antheneo Browser")
-    parser.add_argument("--clean",          action="store_true", help="Remove dist/ and build/ first")
-    parser.add_argument("--icon-only",      action="store_true", help="Regenerate icons and exit")
-    parser.add_argument("--no-installer",   action="store_true", help="Skip installer creation")
-    parser.add_argument("--version",        default="1.0.0",     help="Version string (default: 1.0.0)")
+    parser = argparse.ArgumentParser(
+        description="Build Antheneo Browser installer wizard"
+    )
+    parser.add_argument("--clean",        action="store_true", help="Remove dist/ and build/")
+    parser.add_argument("--icon-only",    action="store_true", help="Regenerate icons and exit")
+    parser.add_argument("--browser-only", action="store_true", help="Compile browser only (stages 1–2)")
+    parser.add_argument("--wizard-only",  action="store_true", help="Compile wizard only (stage 3)")
+    parser.add_argument("--version",      default="1.0.0",     help="Version string (default: 1.0.0)")
     args = parser.parse_args()
 
     version = args.version
-    plat = platform.system().lower()   # 'linux', 'windows', 'darwin'
+    plat    = platform.system()
 
     print(f"""
-{C}╔═══════════════════════════════════════════════════╗
-║   Antheneo Browser — Build System v{version}        ║
-║   Platform: {plat:<37}║
-╚═══════════════════════════════════════════════════╝{N}
-""")
+{C}{B}╔══════════════════════════════════════════════════════════════╗
+║   Antheneo Browser — Build System                            ║
+║   Version: {version:<51}║
+║   Platform: {plat:<50}║
+╚══════════════════════════════════════════════════════════════╝{N}""")
 
     if args.clean:
         clean()
 
-    generate_icons()
+    generate_icons(force=args.clean)
 
     if args.icon_only:
         ok("Icons generated. Exiting.")
         return
 
     check_deps()
-    run_pyinstaller()
+    DIST.mkdir(exist_ok=True)
 
-    if not args.no_installer:
-        if plat == "linux":
-            build_linux_deb(version)
-        elif plat == "windows":
-            build_windows_installer(version)
-        elif plat == "darwin":
-            build_macos_dmg(version)
-        else:
-            warn(f"Unknown platform '{plat}' — skipping installer creation")
+    exe = None
 
-    print_summary(plat, version)
+    if not args.wizard_only:
+        bundle  = build_browser()
+        zip_path = zip_browser(bundle, version)
+    else:
+        zip_path = DIST / "browser_bundle.zip"
+        if not zip_path.exists():
+            err("browser_bundle.zip not found. Run without --wizard-only first.")
+
+    if not args.browser_only:
+        exe = build_wizard(version)
+
+    if exe:
+        print_summary(exe, version)
+    else:
+        info("Browser stages complete.")
+        ok(f"Bundle zip: {zip_path.relative_to(ROOT)}")
+        ok("Run  python build.py --wizard-only  to compile the installer wizard.")
 
 
 if __name__ == "__main__":
